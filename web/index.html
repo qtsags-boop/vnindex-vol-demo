@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VN-Index · Dự báo biến động | Behavioral Hybrid XGBoost-LSTM</title>
+<meta name="description" content="Ứng dụng minh hoạ luận văn: dự báo biến động VN-Index hằng ngày bằng sáu mô hình, trong đó mô hình đề xuất Behavioral Hybrid XGBoost-LSTM.">
+<link rel="stylesheet" href="style.css">
+<!--PWA_HEAD-->
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M3 22 L10 14 L15 18 L22 7 L29 12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="22" cy="7" r="3" fill="#F0A35E"/></svg></div>
+    <div>
+      <div class="t1">VN-Index · Dự báo biến động</div>
+      <div class="t2">Behavioral Hybrid XGBoost-LSTM</div>
+    </div>
+  </div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">Đang tải dữ liệu…</span></div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="today" class="on"><svg viewBox="0 0 24 24"><path d="M4 18 9 12l4 3 7-9"/></svg><span>Hôm nay</span></button>
+  <button data-tab="model"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5 3"/></svg><span>Mô hình</span></button>
+  <button data-tab="compare"><svg viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>So sánh</span></button>
+  <button data-tab="features"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h6"/></svg><span>Biến số</span></button>
+  <button data-tab="about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>Giới thiệu</span></button>
+</nav>
+
+<main>
+  <!-- ============================ HÔM NAY ============================ -->
+  <section id="tab-today" class="tab on">
+    <div class="hero card">
+      <div class="hero-l">
+        <div class="lbl">VN-Index · phiên <b id="mDate">—</b></div>
+        <div class="big" id="mClose">—</div>
+        <div class="chg" id="mChg">—</div>
+      </div>
+      <div class="hero-r">
+        <div class="lbl">Biến động thực tế 20 phiên</div>
+        <div class="big2" id="mVol">—</div>
+        <div id="mVolLvl" class="lvl">—</div>
+      </div>
+    </div>
+
+    <div class="sec-h">
+      <h2>Dự báo biến động cho các tầm tới</h2>
+      <p class="sub">Chọn mô hình. Biến động được quy về đơn vị năm (%/năm); khoảng dao động là ±1 độ lệch chuẩn của VN-Index trong tầm đó (xác suất xấp xỉ 68%).</p>
+    </div>
+    <div class="chips" id="todayModels"></div>
+    <div class="fc-grid" id="fcCards"></div>
+
+    <div class="card">
+      <div class="card-h">
+        <h3>Sáu mô hình dự báo cho cùng một tầm</h3>
+        <div class="seg" id="todayH"></div>
+      </div>
+      <div class="bars" id="todayBars"></div>
+      <p class="note">Mỗi thanh là dự báo của một mô hình tại phiên gần nhất; vạch đứt là biến động thực tế 20 phiên hiện tại để đối chiếu.</p>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <h3>Diễn biến VN-Index và biến động 20 phiên</h3>
+        <div class="seg" id="histRange"></div>
+      </div>
+      <div class="chart-box"><canvas id="cHist"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============================ MÔ HÌNH ============================ -->
+  <section id="tab-model" class="tab">
+    <div class="sec-h">
+      <h2>Dự báo ngoài mẫu theo từng mô hình</h2>
+      <p class="sub">Đường trắng là biến động thực tế; các đường màu là dự báo walk-forward từ 2021 (mô hình chỉ học dữ liệu quá khứ, tái huấn luyện mỗi 126 phiên). Bấm chọn nhiều mô hình để so sánh.</p>
+    </div>
+    <div class="ctrl">
+      <div class="seg" id="mdlH"></div>
+      <div class="seg" id="mdlRange"></div>
+    </div>
+    <div class="chips" id="mdlModels"></div>
+    <div class="card"><div class="chart-box tall"><canvas id="cBT"></canvas></div></div>
+    <div class="grid2">
+      <div class="card" id="mdlInfo"></div>
+      <div class="card">
+        <h3>Nhật ký dự báo hằng ngày</h3>
+        <p class="note">Ứng dụng ghi lại dự báo mỗi phiên; cột “Thực tế” được điền khi đã đủ h phiên để tính biến động thực hiện.</p>
+        <div class="tbl-wrap"><table class="tbl" id="trackTbl"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ SO SÁNH ============================ -->
+  <section id="tab-compare" class="tab">
+    <div class="sec-h">
+      <h2>So sánh hiệu quả dự báo</h2>
+      <p class="sub">RMSE, MAE (sai số) và QLIKE (tổn thất cho biến động, Patton 2011): càng thấp càng tốt. Ô nổi bật là mô hình tốt nhất theo từng chỉ tiêu.</p>
+    </div>
+    <div class="ctrl wrap">
+      <div class="seg" id="cmpSrc"></div>
+      <div class="seg" id="cmpPeriod"></div>
+      <div class="seg" id="cmpH"></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3 id="cmpTitle">Bảng chỉ tiêu</h3><span class="pill" id="cmpRange"></span></div>
+      <div class="tbl-wrap"><table class="tbl metrics" id="cmpTbl"></table></div>
+      <p class="note" id="cmpNote"></p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <div class="card-h"><h3>Kiểm định Diebold-Mariano</h3><div class="seg" id="dmLoss"></div></div>
+        <div class="ctrl"><label class="lbl">Mô hình gốc</label><select id="dmBase"></select></div>
+        <div id="dmBox"></div>
+        <p class="note">DM &lt; 0: mô hình gốc có tổn thất nhỏ hơn. Hiệu chỉnh mẫu nhỏ HLN; mức ý nghĩa 5%.</p>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Model Confidence Set 90%</h3><div class="seg" id="mcsLoss"></div></div>
+        <div id="mcsBox"></div>
+        <p class="note">Mô hình có p-MCS ≥ 0,10 thuộc nhóm tốt nhất về mặt thống kê (Hansen và cộng sự, 2011).</p>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Đóng góp của biến hành vi: M5 so với M4 (giả thuyết H2, H3)</h3>
+      <div class="abl" id="ablBox"></div>
+    </div>
+    <div class="card" id="yearCard">
+      <h3>RMSE theo từng năm</h3>
+      <div class="chart-box"><canvas id="cYear"></canvas></div>
+    </div>
+  </section>
+
+  <!-- ============================ BIẾN SỐ ============================ -->
+  <section id="tab-features" class="tab">
+    <div class="sec-h">
+      <h2>Tám biến hành vi tại phiên gần nhất</h2>
+      <p class="sub">Thanh màu cho biết giá trị hiện tại nằm ở phân vị nào so với toàn bộ lịch sử từ 2015.</p>
+    </div>
+    <div class="beh-grid" id="behGrid"></div>
+    <div class="card">
+      <div class="card-h"><h3>Tầm quan trọng đặc trưng do XGBoost xếp hạng</h3><div class="seg" id="impH"></div></div>
+      <div class="ctrl"><div class="seg" id="impModel"></div></div>
+      <div class="imp" id="impBox"></div>
+      <p class="note">Mô hình lai giữ 15 đặc trưng quan trọng nhất (top-K) để đưa vào LSTM. Màu cam là biến hành vi; viền đậm là biến được chọn.</p>
+    </div>
+    <div class="card">
+      <h3>Biến hành vi được chọn theo tầm dự báo</h3>
+      <div class="tbl-wrap"><table class="tbl" id="selTbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ============================ GIỚI THIỆU ============================ -->
+  <section id="tab-about" class="tab">
+    <div class="card about" id="aboutBox"></div>
+    <div class="card"><h3>Trạng thái dữ liệu</h3><div id="runBox"></div></div>
+    <div class="card warn">
+      <h3>Lưu ý</h3>
+      <p>Ứng dụng phục vụ minh hoạ học thuật cho luận văn. Kết quả dự báo biến động không phải khuyến nghị mua bán chứng khoán. Dữ liệu lấy từ nguồn công khai, có thể chậm hoặc sai lệch so với số liệu chính thức của HOSE.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">© Võ Quang Tuyến · Luận văn thạc sĩ Tài chính – Ngân hàng, HUB · <span id="ver"></span></footer>
+
+<script src="lib/chart.umd.min.js"></script>
+<!--APP_CONFIG-->
+<script src="app.js"></script>
+</body>
+</html>

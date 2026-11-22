@@ -1,0 +1,38 @@
+name: Huấn luyện lại hằng tuần
+
+on:
+  schedule:
+    - cron: '7 1 * * 6'         # 08:07 sáng thứ Bảy, giờ Việt Nam
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: state
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Cài thư viện
+        run: |
+          pip install -r requirements.txt
+          pip install vnstock || echo "Không cài được vnstock — dùng các nguồn dự phòng"
+      - name: Lấy trạng thái
+        run: bash .github/scripts/get_state.sh
+      - name: Cập nhật walk-forward, huấn luyện lại, dự báo
+        run: python -m engine.run weekly
+      - name: Lưu trạng thái
+        run: bash .github/scripts/push_dir.sh state state "Huấn luyện tuần $(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M')"
+      - name: Cập nhật trang web
+        run: bash .github/scripts/deploy_pages.sh

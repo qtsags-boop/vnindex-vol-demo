@@ -1,0 +1,38 @@
+name: Dự báo hằng ngày
+
+on:
+  schedule:
+    - cron: '30 9 * * 1-5'      # 16:30 giờ Việt Nam, thứ Hai – thứ Sáu
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: state
+  cancel-in-progress: false
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Cài thư viện
+        run: |
+          pip install -r requirements.txt
+          pip install vnstock || echo "Không cài được vnstock — dùng các nguồn dự phòng"
+      - name: Lấy trạng thái
+        run: bash .github/scripts/get_state.sh
+      - name: Lấy dữ liệu mới, dự báo, xuất JSON
+        run: python -m engine.run daily
+      - name: Lưu trạng thái
+        run: bash .github/scripts/push_dir.sh state state "Dự báo $(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M')"
+      - name: Cập nhật trang web
+        run: bash .github/scripts/deploy_pages.sh

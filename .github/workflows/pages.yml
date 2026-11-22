@@ -1,0 +1,27 @@
+name: Cập nhật giao diện web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'pwa/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: state
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - run: bash .github/scripts/get_state.sh
+      - run: bash .github/scripts/deploy_pages.sh

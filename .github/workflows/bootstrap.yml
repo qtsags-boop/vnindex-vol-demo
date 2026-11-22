@@ -1,0 +1,99 @@
+name: Khởi tạo toàn bộ (walk-forward từ 2021)
+
+# Chạy tay một lần khi mới tạo repo, hoặc khi muốn tính lại toàn bộ.
+# Chia 12 việc song song (3 tầm × 4 mô hình học máy) để rút ngắn thời gian.
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Tính lại cả các khối walk-forward đã có'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: state
+  cancel-in-progress: false
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: |
+          pip install pandas numpy requests yfinance
+          pip install vnstock || echo "Không cài được vnstock — dùng các nguồn dự phòng"
+      - run: bash .github/scripts/get_state.sh
+      - name: Lấy dữ liệu
+        run: python -m engine.run fetch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: state-data
+          path: state/data
+          include-hidden-files: true
+
+  models:
+    needs: data
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        h: [1, 5, 22]
+        model: [M2, M3, M4, M5]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: state-data
+          path: state/data
+      - name: Walk-forward ${{ matrix.model }} h=${{ matrix.h }}
+        run: python -m engine.run backtest --h ${{ matrix.h }} --models ${{ matrix.model }} ${{ inputs.force && '--force' || '' }}
+      - name: Huấn luyện mô hình dùng cho dự báo hằng ngày
+        run: python -m engine.run train --h ${{ matrix.h }} --models ${{ matrix.model }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: models-h${{ matrix.h }}-${{ matrix.model }}
+          path: state/models
+
+  gather:
+    needs: models
+    if: always() && needs.models.result != 'cancelled'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: bash .github/scripts/get_state.sh
+      - uses: actions/download-artifact@v4
+        with:
+          name: state-data
+          path: state/data
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: models-*
+          path: state/models
+          merge-multiple: true
+      - name: Dự báo và xuất JSON
+        run: python -m engine.run export
+      - name: Lưu trạng thái
+        run: bash .github/scripts/push_dir.sh state state "Khởi tạo $(TZ=Asia/Ho_Chi_Minh date '+%Y-%m-%d %H:%M')"
+      - name: Cập nhật trang web
+        run: bash .github/scripts/deploy_pages.sh

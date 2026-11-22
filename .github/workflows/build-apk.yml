@@ -1,0 +1,56 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'web/**'
+      - 'pwa/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Đóng gói giao diện web vào APK (kèm dữ liệu mới nhất để dùng ngoại tuyến)
+        run: |
+          bash .github/scripts/get_state.sh
+          python3 pwa/build_site.py "$GITHUB_SHA" --state state --out app/src/main/assets
+          OWNER="${GITHUB_REPOSITORY%%/*}"; NAME="${GITHUB_REPOSITORY#*/}"
+          echo "https://${OWNER,,}.github.io/${NAME}/" > app/src/main/assets/remote.txt
+          cat app/src/main/assets/remote.txt
+      - name: Build debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Đổi tên APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk VNIndex-DuBaoBienDong.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VNIndex-DuBaoBienDong-apk
+          path: VNIndex-DuBaoBienDong.apk
+      - name: Đưa APK lên nhánh apk
+        run: |
+          mkdir -p /tmp/out && cp VNIndex-DuBaoBienDong.apk /tmp/out/
+          bash .github/scripts/push_dir.sh /tmp/out apk "APK build ${GITHUB_SHA::7} (run ${GITHUB_RUN_NUMBER})"
+      - name: Tạo GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v1.0.${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" VNIndex-DuBaoBienDong.apk \
+            --title "VN-Index Dự báo biến động – $TAG" \
+            --notes "Bản APK (debug, tự ký) build từ commit ${GITHUB_SHA::7}. Cài trên Android 7.0+; bật cho phép cài ứng dụng từ nguồn không xác định. Có mạng: ứng dụng mở trang web với dữ liệu mới nhất; không có mạng: dùng giao diện và dữ liệu đóng gói sẵn." \
+            --target "$GITHUB_SHA"

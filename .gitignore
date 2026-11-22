@@ -1,0 +1,11 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+_site/
+state/
+__pycache__/
+*.pyc
+app/src/main/assets/
