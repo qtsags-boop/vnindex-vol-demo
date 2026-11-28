@@ -1,0 +1,17 @@
+{
+  "name": "VN-Index · Dự báo biến động",
+  "short_name": "VN-Index Vol",
+  "description": "Dự báo biến động VN-Index hằng ngày bằng sáu mô hình, mô hình đề xuất Behavioral Hybrid XGBoost-LSTM.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0E1B2C",
+  "theme_color": "#0E1B2C",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
